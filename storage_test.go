@@ -2,9 +2,10 @@ package tprstorage
 
 import (
 	"testing"
+
+	"github.com/giantswarm/microstorage"
 )
 
 func TestInterface(t *testing.T) {
-	// This won't compile if Storage doens't fullfil the interface.
-	//var _ microstorage.Storage = &Storage{}
+	var _ microstorage.Storage = &Storage{}
 }
