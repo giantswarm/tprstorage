@@ -14,14 +14,13 @@ import (
 	api "k8s.io/client-go/pkg/api/v1"
 )
 
-const (
-	// TODO think if we want to store as a separate TPO in sing TPR.
-	customObjectName = "storage"
-	// TODO namespace should be configurable.
-	namespace = "pawel"
+type TPRConfig struct {
+	Name, Version, Description string
+}
 
-	pathPrefix = "/data/"
-)
+type TPOConfig struct {
+	Name, Namespace string
+}
 
 type Config struct {
 	// Dependencies.
@@ -31,23 +30,35 @@ type Config struct {
 
 	// Settings.
 
-	TPRName        string
-	TPRVersion     string
-	TPRDescription string
+	// TPR it the third party resource where data objects are stored.
+	TPR TPRConfig
+
+	// TPOName is the third party object used to store data. This
+	// object will be creatd inside a third party resource specified by
+	// TPR. If the object already exists it will be reused. It is
+	// safe to run multiple Storage instances using the same TPO.
+	TPO TPOConfig
 }
 
 func DefaultConfig() Config {
 	return Config{
 		// Dependencies.
 
-		K8sClient: nil,
-		Logger:    nil,
+		K8sClient: nil, // Required.
+		Logger:    nil, // Required.
 
 		// Settings.
 
-		TPRName:        "",
-		TPRVersion:     "",
-		TPRDescription: "",
+		TPR: TPRConfig{
+			Name:        "tpr-storage.giantswarm.io",
+			Version:     "v1",
+			Description: "Storage data managed by github.com/giantswarm/tprstorage",
+		},
+
+		TPO: TPOConfig{
+			Name:      "", // Required.
+			Namespace: "giantswarm",
+		},
 	}
 }
 
@@ -57,6 +68,9 @@ type Storage struct {
 
 	k8sClient kubernetes.Interface
 	tpr       *tpr.TPR
+
+	tpoEndpoint     string
+	tpoListEndpoint string
 }
 
 func New(ctx context.Context, config Config) (*Storage, error) {
@@ -66,17 +80,25 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 	if config.Logger == nil {
 		return nil, microerror.Maskf(invalidConfigError, "config.Logger is nil")
 	}
-	if config.TPRName == "" {
-		return nil, microerror.Maskf(invalidConfigError, "config.TPRName is empty")
+	if config.TPR.Name == "" {
+		return nil, microerror.Maskf(invalidConfigError, "config.TPR.Name is empty")
 	}
-	if config.TPRVersion == "" {
-		return nil, microerror.Maskf(invalidConfigError, "config.TPRVersion is empty")
+	if config.TPR.Version == "" {
+		return nil, microerror.Maskf(invalidConfigError, "config.TPR.Version is empty")
 	}
-	// TPRDescription is OK to be empty.
+	// config.TPR.Description is OK to be empty.
+	if config.TPO.Name == "" {
+		return nil, microerror.Maskf(invalidConfigError, "config.TPO.Name is empty")
+	}
+	if config.TPO.Namespace == "" {
+		config.TPO.Namespace = "default"
+	}
 
 	logctx := []interface{}{
-		"tprName", config.TPRName,
-		"tprVersion", config.TPRVersion,
+		"tprName", config.TPR.Name,
+		"tprVersion", config.TPR.Version,
+		"tpoName", config.TPO.Name,
+		"tpoNamespace", config.TPO.Namespace,
 	}
 
 	var newTPR *tpr.TPR
@@ -87,9 +109,9 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 
 		c.K8sClient = config.K8sClient
 
-		c.Name = config.TPRName
-		c.Version = config.TPRVersion
-		c.Description = config.TPRDescription
+		c.Name = config.TPR.Name
+		c.Version = config.TPR.Version
+		c.Description = config.TPR.Description
 
 		var err error
 
@@ -103,9 +125,14 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		k8sClient: config.K8sClient,
 		tpr:       newTPR,
 
+		tpoEndpoint:     newTPR.Endpoint(config.TPO.Namespace) + "/" + config.TPO.Name,
+		tpoListEndpoint: newTPR.Endpoint(config.TPO.Namespace),
+
 		logger: config.Logger,
 		logctx: logctx,
 	}
+
+	// TODO extract init func
 
 	// Create TPR resource.
 	{
@@ -123,8 +150,8 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 	{
 		ns := api.Namespace{
 			ObjectMeta: apismeta.ObjectMeta{
-				Name:      namespace,
-				Namespace: namespace,
+				Name:      config.TPO.Namespace,
+				Namespace: config.TPO.Namespace,
 				// TODO think about labels
 			},
 		}
@@ -146,8 +173,8 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 				APIVersion: s.tpr.APIVersion(),
 			},
 			ObjectMeta: apismeta.ObjectMeta{
-				Name:      customObjectName,
-				Namespace: namespace,
+				Name:      config.TPO.Name,
+				Namespace: config.TPO.Namespace,
 				Annotations: map[string]string{
 					"storageDoNotOmitempty": "non-empty",
 				},
@@ -164,7 +191,7 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		_, err = s.k8sClient.Core().RESTClient().
 			Post().
 			Context(ctx).
-			AbsPath(s.tpr.Endpoint(namespace)).
+			AbsPath(s.tpoListEndpoint).
 			Body(body).
 			DoRaw()
 		if errors.IsAlreadyExists(err) {
@@ -208,7 +235,7 @@ func (s *Storage) Put(ctx context.Context, key, value string) error {
 	_, err := s.k8sClient.Core().RESTClient().
 		Patch(types.MergePatchType).
 		Context(ctx).
-		AbsPath(s.tpr.Endpoint(namespace) + "/" + customObjectName).
+		AbsPath(s.tpoEndpoint).
 		Body(body).
 		DoRaw()
 	if err != nil {
@@ -241,7 +268,7 @@ func (s *Storage) getData(ctx context.Context) (map[string]string, error) {
 	res, err := s.k8sClient.Core().RESTClient().
 		Get().
 		Context(ctx).
-		AbsPath(s.tpr.Endpoint(namespace) + "/" + customObjectName).
+		AbsPath(s.tpoEndpoint).
 		DoRaw()
 	if err != nil {
 		return nil, microerror.Maskf(err, "get TPO")
