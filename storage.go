@@ -3,9 +3,11 @@ package tprstorage
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
+	"github.com/giantswarm/microstorage"
 	"github.com/giantswarm/operatorkit/tpr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apismeta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -258,10 +260,72 @@ func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
 func (s *Storage) Search(ctx context.Context, key string) (string, error) {
 	data, err := s.getData(ctx)
 	if err != nil {
-		return "", microerror.Maskf(err, "Exists")
+		return "", microerror.Maskf(err, "Search")
 	}
 
-	return data[key], nil
+	v, ok := data[key]
+	if !ok {
+		return "", microerror.Maskf(microstorage.NotFoundError, "Search key=%", key)
+	}
+
+	return v, nil
+}
+
+func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
+	data, err := s.getData(ctx)
+	if err != nil {
+		return nil, microerror.Maskf(err, "Exists")
+	}
+
+	var list []string
+
+	keyLen := len(key)
+	for k, _ := range data {
+		if !strings.HasPrefix(k, key) {
+			continue
+		}
+
+		// k must be exact match or be separated with /.
+		// I.e. /foo is under /foo/bar but not under /foobar.
+		if len(k) != keyLen && k[keyLen] != '/' {
+			continue
+		}
+
+		list = append(list, k[keyLen+1:])
+	}
+
+	return list, nil
+}
+
+func (s *Storage) Delete(ctx context.Context, key string) error {
+	var body []byte
+	{
+		v := struct {
+			Data map[string]*string `json:"data"`
+		}{
+			Data: map[string]*string{
+				key: nil,
+			},
+		}
+
+		var err error
+		body, err = json.Marshal(&v)
+		if err != nil {
+			return microerror.Maskf(err, "marshaling %#v", v)
+		}
+	}
+
+	_, err := s.k8sClient.Core().RESTClient().
+		Patch(types.MergePatchType).
+		Context(ctx).
+		AbsPath(s.tpoEndpoint).
+		Body(body).
+		DoRaw()
+	if err != nil {
+		return microerror.Maskf(err, "deleting value for key=%s, patch=%s", key, body)
+	}
+
+	return nil
 }
 
 func (s *Storage) getData(ctx context.Context) (map[string]string, error) {
