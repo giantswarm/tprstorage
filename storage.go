@@ -241,7 +241,7 @@ func (s *Storage) Put(ctx context.Context, key, value string) error {
 		Body(body).
 		DoRaw()
 	if err != nil {
-		return microerror.Maskf(err, "creating value for key=%s, patch=%s", key, body)
+		return microerror.Maskf(err, "putting key=%s, patch=%s", key, body)
 	}
 
 	return nil
@@ -250,7 +250,7 @@ func (s *Storage) Put(ctx context.Context, key, value string) error {
 func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
 	data, err := s.getData(ctx)
 	if err != nil {
-		return false, microerror.Maskf(err, "Exists")
+		return false, microerror.Maskf(err, "checking existence key=%s", key)
 	}
 
 	_, ok := data[key]
@@ -260,12 +260,12 @@ func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
 func (s *Storage) Search(ctx context.Context, key string) (string, error) {
 	data, err := s.getData(ctx)
 	if err != nil {
-		return "", microerror.Maskf(err, "Search")
+		return "", microerror.Maskf(err, "searching for key=%s", key)
 	}
 
 	v, ok := data[key]
 	if !ok {
-		return "", microerror.Maskf(microstorage.NotFoundError, "Search key=%", key)
+		return "", microerror.Maskf(microstorage.NotFoundError, "searching for key=%s", key)
 	}
 
 	return v, nil
@@ -274,7 +274,7 @@ func (s *Storage) Search(ctx context.Context, key string) (string, error) {
 func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
 	data, err := s.getData(ctx)
 	if err != nil {
-		return nil, microerror.Maskf(err, "Exists")
+		return nil, microerror.Maskf(err, "listing key=%s", key)
 	}
 
 	var list []string
