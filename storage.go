@@ -31,13 +31,13 @@ type Config struct {
 
 	// Settings.
 
-	// TPR it the third party resource where data objects are stored.
+	// TPR is the third party resource where data objects are stored.
 	TPR TPRConfig
 
-	// TPOName is the third party object used to store data. This
-	// object will be creatd inside a third party resource specified by
-	// TPR. If the object already exists it will be reused. It is
-	// safe to run multiple Storage instances using the same TPO.
+	// TPOName is the third party object used to store data. This object
+	// will be created inside a third party resource specified by TPR. If
+	// the object already exists it will be reused. It is safe to run
+	// multiple Storage instances using the same TPO.
 	TPO TPOConfig
 }
 
