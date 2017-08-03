@@ -7,7 +7,6 @@ import (
 
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
-	"github.com/giantswarm/microstorage"
 	"github.com/giantswarm/operatorkit/tpr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apismeta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,13 +31,13 @@ type Config struct {
 
 	// Settings.
 
-	// TPR is the third party resource where data objects are stored.
+	// TPR it the third party resource where data objects are stored.
 	TPR TPRConfig
 
-	// TPOName is the third party object used to store data. This object
-	// will be created inside a third party resource specified by TPR. If
-	// the object already exists it will be reused. It is safe to run
-	// multiple Storage instances using the same TPO.
+	// TPOName is the third party object used to store data. This
+	// object will be creatd inside a third party resource specified by
+	// TPR. If the object already exists it will be reused. It is
+	// safe to run multiple Storage instances using the same TPO.
 	TPO TPOConfig
 }
 
@@ -96,13 +95,6 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		config.TPO.Namespace = "default"
 	}
 
-	logctx := []interface{}{
-		"tprName", config.TPR.Name,
-		"tprVersion", config.TPR.Version,
-		"tpoName", config.TPO.Name,
-		"tpoNamespace", config.TPO.Namespace,
-	}
-
 	var newTPR *tpr.TPR
 	{
 		c := tpr.DefaultConfig()
@@ -130,8 +122,12 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		tpoEndpoint:     newTPR.Endpoint(config.TPO.Namespace) + "/" + config.TPO.Name,
 		tpoListEndpoint: newTPR.Endpoint(config.TPO.Namespace),
 
-		logger: config.Logger,
-		logctx: logctx,
+		logger: config.Logger.With(
+			"tprName", config.TPR.Name,
+			"tprVersion", config.TPR.Version,
+			"tpoName", config.TPO.Name,
+			"tpoNamespace", config.TPO.Namespace,
+		),
 	}
 
 	// TODO extract init func
@@ -140,11 +136,11 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 	{
 		err := s.tpr.CreateAndWait()
 		if tpr.IsAlreadyExists(err) {
-			s.log("debug", "TPR already exists")
+			s.logger.Log("debug", "TPR already exists")
 		} else if err != nil {
 			return nil, microerror.Mask(err)
 		} else {
-			s.log("debug", "TPR created")
+			s.logger.Log("debug", "TPR created")
 		}
 	}
 
@@ -159,11 +155,11 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		}
 		_, err := s.k8sClient.CoreV1().Namespaces().Create(&ns)
 		if errors.IsAlreadyExists(err) {
-			s.log("debug", "namespace "+ns.Name+" already exists")
+			s.logger.Log("debug", "namespace "+ns.Name+" already exists")
 		} else if err != nil {
 			return nil, microerror.Maskf(err, "creating namespace %#v", ns)
 		} else {
-			s.log("debug", "namespace "+ns.Name+" created")
+			s.logger.Log("debug", "namespace "+ns.Name+" created")
 		}
 	}
 
@@ -197,11 +193,11 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 			Body(body).
 			DoRaw()
 		if errors.IsAlreadyExists(err) {
-			s.log("debug", "TPO "+tpo.Name+" already exists")
+			s.logger.Log("debug", "TPO "+tpo.Name+" already exists")
 		} else if err != nil {
 			return nil, microerror.Maskf(err, "creating TPO %#v", tpo)
 		} else {
-			s.log("debug", "TPO "+tpo.Name+" created")
+			s.logger.Log("debug", "TPO "+tpo.Name+" created")
 		}
 	}
 
@@ -265,7 +261,7 @@ func (s *Storage) Search(ctx context.Context, key string) (string, error) {
 
 	v, ok := data[key]
 	if !ok {
-		return "", microerror.Maskf(microstorage.NotFoundError, "searching for key=%s", key)
+		return "", microerror.Maskf(notFoundError, "searching for key=%s", key)
 	}
 
 	return v, nil
@@ -345,11 +341,4 @@ func (s *Storage) getData(ctx context.Context) (map[string]string, error) {
 	}
 
 	return v.Data, nil
-}
-
-func (s *Storage) log(v ...interface{}) {
-	a := make([]interface{}, 0, len(v)+len(s.logctx))
-	a = append(a, v...)
-	a = append(a, s.logctx...)
-	s.logger.Log(a...)
 }
