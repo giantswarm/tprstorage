@@ -72,9 +72,14 @@ type Storage struct {
 
 	tpoEndpoint     string
 	tpoListEndpoint string
+
+	// tpoConfig is used to boot the Storage. See Boot method.
+	tpoConfig TPOConfig
 }
 
-func New(ctx context.Context, config Config) (*Storage, error) {
+// New creates an uninitialized instance of Storage. It is required to call
+// Boot functions before running any RW operations.
+func New(config Config) (*Storage, error) {
 	if config.K8sClient == nil {
 		return nil, microerror.Maskf(invalidConfigError, "config.K8sClient is nil")
 	}
@@ -115,30 +120,36 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		}
 	}
 
-	s := &Storage{
+	storage := &Storage{
 		k8sClient: config.K8sClient,
-		tpr:       newTPR,
-
-		tpoEndpoint:     newTPR.Endpoint(config.TPO.Namespace) + "/" + config.TPO.Name,
-		tpoListEndpoint: newTPR.Endpoint(config.TPO.Namespace),
-
 		logger: config.Logger.With(
 			"tprName", config.TPR.Name,
 			"tprVersion", config.TPR.Version,
 			"tpoName", config.TPO.Name,
 			"tpoNamespace", config.TPO.Namespace,
 		),
+
+		tpr: newTPR,
+
+		tpoEndpoint:     newTPR.Endpoint(config.TPO.Namespace) + "/" + config.TPO.Name,
+		tpoListEndpoint: newTPR.Endpoint(config.TPO.Namespace),
+
+		tpoConfig: config.TPO,
 	}
 
-	// TODO extract init func
+	return storage, nil
+}
 
+// Boot initializes the Storage by ensuring Kubernetes resources used by the
+// Storage are in place. It is safe to call Boot more than once.
+func (s *Storage) Boot(ctx context.Context) error {
 	// Create TPR resource.
 	{
 		err := s.tpr.CreateAndWait()
 		if tpr.IsAlreadyExists(err) {
 			s.logger.Log("debug", "TPR already exists")
 		} else if err != nil {
-			return nil, microerror.Mask(err)
+			return microerror.Mask(err)
 		} else {
 			s.logger.Log("debug", "TPR created")
 		}
@@ -148,8 +159,8 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 	{
 		ns := api.Namespace{
 			ObjectMeta: apismeta.ObjectMeta{
-				Name:      config.TPO.Namespace,
-				Namespace: config.TPO.Namespace,
+				Name:      s.tpoConfig.Namespace,
+				Namespace: s.tpoConfig.Namespace,
 				// TODO think about labels
 			},
 		}
@@ -157,7 +168,7 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		if errors.IsAlreadyExists(err) {
 			s.logger.Log("debug", "namespace "+ns.Name+" already exists")
 		} else if err != nil {
-			return nil, microerror.Maskf(err, "creating namespace %#v", ns)
+			return microerror.Maskf(err, "creating namespace %#v", ns)
 		} else {
 			s.logger.Log("debug", "namespace "+ns.Name+" created")
 		}
@@ -171,8 +182,8 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 				APIVersion: s.tpr.APIVersion(),
 			},
 			ObjectMeta: apismeta.ObjectMeta{
-				Name:      config.TPO.Name,
-				Namespace: config.TPO.Namespace,
+				Name:      s.tpoConfig.Name,
+				Namespace: s.tpoConfig.Namespace,
 				Annotations: map[string]string{
 					"storageDoNotOmitempty": "non-empty",
 				},
@@ -184,7 +195,7 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		}
 		body, err := json.Marshal(&tpo)
 		if err != nil {
-			return nil, microerror.Maskf(err, "marshaling %#v", tpo)
+			return microerror.Maskf(err, "marshaling %#v", tpo)
 		}
 		_, err = s.k8sClient.Core().RESTClient().
 			Post().
@@ -195,13 +206,13 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		if errors.IsAlreadyExists(err) {
 			s.logger.Log("debug", "TPO "+tpo.Name+" already exists")
 		} else if err != nil {
-			return nil, microerror.Maskf(err, "creating TPO %#v", tpo)
+			return microerror.Maskf(err, "creating TPO %#v", tpo)
 		} else {
 			s.logger.Log("debug", "TPO "+tpo.Name+" created")
 		}
 	}
 
-	return s, nil
+	return nil
 }
 
 func (s *Storage) Create(ctx context.Context, key, value string) error {
