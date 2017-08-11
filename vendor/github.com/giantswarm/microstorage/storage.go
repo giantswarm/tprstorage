@@ -9,7 +9,7 @@ import (
 // storage cares about are key-value pairs. Code making use of the storage
 // have to take care about specific types they care about them self.
 type Storage interface {
-	// Create is deprecated in favour of Set. Its semantics is unspecified
+	// Create is deprecated in favour of Put. Its semantics is unspecified
 	// when the value of the key does not exist.
 	//
 	// Create stores the given value under the given key. Keys and values
@@ -31,8 +31,9 @@ type Storage interface {
 	Delete(ctx context.Context, key string) error
 	// Exists checks if a value under the given key exists or not.
 	Exists(ctx context.Context, key string) (bool, error)
-	// List does a lookup for all values stored under key and returns them, if
-	// any.
+	// List does a lookup for all keys stored under the key, and returns the
+	// relative key path, if any.
+	// E.g: listing /foo/, with the key /foo/bar, returns bar.
 	List(ctx context.Context, key string) ([]string, error)
 	// Search does a lookup for the value stored under key and returns it, if any.
 	Search(ctx context.Context, key string) (string, error)
