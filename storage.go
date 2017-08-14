@@ -7,6 +7,7 @@ import (
 
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
+	"github.com/giantswarm/microstorage"
 	"github.com/giantswarm/operatorkit/tpr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apismeta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -216,7 +217,14 @@ func (s *Storage) Boot(ctx context.Context) error {
 }
 
 func (s *Storage) Create(ctx context.Context, key, value string) error {
-	err := s.Put(ctx, key, value)
+	var err error
+
+	key, err = microstorage.SanitizeKey(key)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = s.Put(ctx, key, value)
 	if err != nil {
 		microerror.Mask(err)
 	}
@@ -224,6 +232,13 @@ func (s *Storage) Create(ctx context.Context, key, value string) error {
 }
 
 func (s *Storage) Put(ctx context.Context, key, value string) error {
+	var err error
+
+	key, err = microstorage.SanitizeKey(key)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	var body []byte
 	{
 		v := struct {
@@ -241,7 +256,7 @@ func (s *Storage) Put(ctx context.Context, key, value string) error {
 		}
 	}
 
-	_, err := s.k8sClient.Core().RESTClient().
+	_, err = s.k8sClient.Core().RESTClient().
 		Patch(types.MergePatchType).
 		Context(ctx).
 		AbsPath(s.tpoEndpoint).
@@ -255,6 +270,13 @@ func (s *Storage) Put(ctx context.Context, key, value string) error {
 }
 
 func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
+	var err error
+
+	key, err = microstorage.SanitizeKey(key)
+	if err != nil {
+		return false, microerror.Mask(err)
+	}
+
 	data, err := s.getData(ctx)
 	if err != nil {
 		return false, microerror.Maskf(err, "checking existence key=%s", key)
@@ -265,6 +287,13 @@ func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 func (s *Storage) Search(ctx context.Context, key string) (string, error) {
+	var err error
+
+	key, err = microstorage.SanitizeKey(key)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
 	data, err := s.getData(ctx)
 	if err != nil {
 		return "", microerror.Maskf(err, "searching for key=%s", key)
@@ -279,32 +308,62 @@ func (s *Storage) Search(ctx context.Context, key string) (string, error) {
 }
 
 func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
+	var err error
+
+	key, err = microstorage.SanitizeListKey(key)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
 	data, err := s.getData(ctx)
 	if err != nil {
 		return nil, microerror.Maskf(err, "listing key=%s", key)
+	}
+
+	// Special case.
+	if key == "/" {
+		var list []string
+		for k, _ := range data {
+			list = append(list, k)
+		}
+		return list, nil
 	}
 
 	var list []string
 
 	keyLen := len(key)
 	for k, _ := range data {
+		if len(k) <= keyLen+1 {
+			continue
+		}
 		if !strings.HasPrefix(k, key) {
 			continue
 		}
 
 		// k must be exact match or be separated with /.
 		// I.e. /foo is under /foo/bar but not under /foobar.
-		if len(k) != keyLen && k[keyLen] != '/' {
+		if k[keyLen] != '/' {
 			continue
 		}
 
 		list = append(list, k[keyLen+1:])
 	}
 
+	if len(list) == 0 {
+		return nil, microerror.Maskf(microstorage.NotFoundError, key)
+	}
+
 	return list, nil
 }
 
 func (s *Storage) Delete(ctx context.Context, key string) error {
+	var err error
+
+	key, err = microstorage.SanitizeKey(key)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	var body []byte
 	{
 		v := struct {
@@ -322,7 +381,7 @@ func (s *Storage) Delete(ctx context.Context, key string) error {
 		}
 	}
 
-	_, err := s.k8sClient.Core().RESTClient().
+	_, err = s.k8sClient.Core().RESTClient().
 		Patch(types.MergePatchType).
 		Context(ctx).
 		AbsPath(s.tpoEndpoint).
