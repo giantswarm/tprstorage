@@ -104,7 +104,6 @@ func TestIntegration(t *testing.T) {
 				t.Log("error cleaning up TPO %s/%s: %#v", config.TPO.Namespace, config.TPO.Name, err)
 			}
 		}()
-
 	}
 
 	err = storage.Boot(context.TODO())
