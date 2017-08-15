@@ -276,9 +276,9 @@ func testListInvalid(t *testing.T, storage microstorage.Storage) {
 		// - /testListInvalid-key-XXXX/two
 		//
 		// Listing /testListInvalid-key should fail.
-		_, err = storage.List(ctx, baseKey)
-		assert.Error(t, err, "%s: key=%s", name, baseKey)
-		assert.True(t, microstorage.IsNotFound(err), "%s: key=%s expected IsNotFoundError", name, baseKey)
+		list, err := storage.List(ctx, baseKey)
+		assert.NoError(t, err, "%s: key=%s", name, baseKey)
+		assert.Empty(t, list, "%s: key=%s", name, baseKey)
 	}
 }
 
