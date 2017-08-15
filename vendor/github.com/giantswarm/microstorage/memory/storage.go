@@ -142,10 +142,6 @@ func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
 		list = append(list, k[i+1:])
 	}
 
-	if len(list) == 0 {
-		return nil, microerror.Maskf(microstorage.NotFoundError, key)
-	}
-
 	return list, nil
 }
 
