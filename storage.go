@@ -324,6 +324,7 @@ func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
 	if key == "/" {
 		var list []string
 		for k, _ := range data {
+			k = k[1:] // Skip leading slash '/'.
 			list = append(list, k)
 		}
 		return list, nil

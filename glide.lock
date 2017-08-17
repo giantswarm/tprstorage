@@ -1,5 +1,5 @@
 hash: da0257e9ba3c1757a39e0c1dddef38367c2ea0db73c4e18c8ed241bd178cec43
-updated: 2017-08-15T15:00:00.689432272+02:00
+updated: 2017-08-17T14:58:00.587574102+02:00
 imports:
 - name: github.com/cenkalti/backoff
   version: 61153c768f31ee5f130071d08fc82b85208528de
@@ -24,11 +24,11 @@ imports:
 - name: github.com/giantswarm/micrologger
   version: 8a69b2ab80ba2d0bd40d609206518fefacfc8fdf
 - name: github.com/giantswarm/microstorage
-  version: 55dcb4ea118ed35ec49d4d1346e907affa098df5
+  version: f004c723f0583e85f0cf24031af1404c2d5c6005
   subpackages:
   - storagetest
 - name: github.com/giantswarm/operatorkit
-  version: 9c07028f0dd7fa029954f09dd1e1b073b7629bc1
+  version: 7f7b7fea307a52987696f78b6c6ec1b86ab756db
   subpackages:
   - tpr
 - name: github.com/go-kit/kit

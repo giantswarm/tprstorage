@@ -242,9 +242,9 @@ func testListNested(t *testing.T, storage microstorage.Storage) {
 		keyAll := "/"
 		keys, err := storage.List(ctx, keyAll)
 		assert.NoError(t, err, "%s: key=%s", name, key0)
-		assert.Contains(t, keys, sanitize(key1), "%s: key=%s", name, keyAll)
-		assert.Contains(t, keys, sanitize(key2), "%s: key=%s", name, keyAll)
-		assert.Contains(t, keys, sanitize(key3), "%s: key=%s", name, keyAll)
+		assert.Contains(t, keys, sanitize(key1)[1:], "%s: key=%s", name, keyAll)
+		assert.Contains(t, keys, sanitize(key2)[1:], "%s: key=%s", name, keyAll)
+		assert.Contains(t, keys, sanitize(key3)[1:], "%s: key=%s", name, keyAll)
 	}
 }
 

@@ -116,7 +116,8 @@ func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
 	if key == "/" {
 		var list []string
 		for k, _ := range s.data {
-			list = append(list, k)
+			// append a key without leading '/'.
+			list = append(list, k[1:])
 		}
 		return list, nil
 	}
