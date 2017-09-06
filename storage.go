@@ -216,28 +216,8 @@ func (s *Storage) Boot(ctx context.Context) error {
 	return nil
 }
 
-func (s *Storage) Create(ctx context.Context, key, value string) error {
-	var err error
-
-	key, err = microstorage.SanitizeKey(key)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	err = s.Put(ctx, key, value)
-	if err != nil {
-		microerror.Mask(err)
-	}
-	return nil
-}
-
-func (s *Storage) Put(ctx context.Context, key, value string) error {
-	var err error
-
-	key, err = microstorage.SanitizeKey(key)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+func (s *Storage) Put(ctx context.Context, kv microstorage.KV) error {
+	key, value := kv.Key(), kv.Val()
 
 	var body []byte
 	{
@@ -256,7 +236,7 @@ func (s *Storage) Put(ctx context.Context, key, value string) error {
 		}
 	}
 
-	_, err = s.k8sClient.Core().RESTClient().
+	_, err := s.k8sClient.Core().RESTClient().
 		Patch(types.MergePatchType).
 		Context(ctx).
 		AbsPath(s.tpoEndpoint).
@@ -269,13 +249,8 @@ func (s *Storage) Put(ctx context.Context, key, value string) error {
 	return nil
 }
 
-func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
-	var err error
-
-	key, err = microstorage.SanitizeKey(key)
-	if err != nil {
-		return false, microerror.Mask(err)
-	}
+func (s *Storage) Exists(ctx context.Context, k microstorage.K) (bool, error) {
+	key := k.Key()
 
 	data, err := s.getData(ctx)
 	if err != nil {
@@ -286,34 +261,24 @@ func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
-func (s *Storage) Search(ctx context.Context, key string) (string, error) {
-	var err error
-
-	key, err = microstorage.SanitizeKey(key)
-	if err != nil {
-		return "", microerror.Mask(err)
-	}
+func (s *Storage) Search(ctx context.Context, k microstorage.K) (microstorage.KV, error) {
+	key := k.Key()
 
 	data, err := s.getData(ctx)
 	if err != nil {
-		return "", microerror.Maskf(err, "searching for key=%s", key)
+		return microstorage.KV{}, microerror.Maskf(err, "searching for key=%s", key)
 	}
 
 	v, ok := data[key]
 	if !ok {
-		return "", microerror.Maskf(notFoundError, "searching for key=%s", key)
+		return microstorage.KV{}, microerror.Maskf(notFoundError, "searching for key=%s", key)
 	}
 
-	return v, nil
+	return microstorage.MustKV(microstorage.NewKV(key, v)), nil
 }
 
-func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
-	var err error
-
-	key, err = microstorage.SanitizeListKey(key)
-	if err != nil {
-		return nil, microerror.Mask(err)
-	}
+func (s *Storage) List(ctx context.Context, k microstorage.K) ([]microstorage.KV, error) {
+	key := k.Key()
 
 	data, err := s.getData(ctx)
 	if err != nil {
@@ -322,18 +287,17 @@ func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
 
 	// Special case.
 	if key == "/" {
-		var list []string
-		for k, _ := range data {
-			k = k[1:] // Skip leading slash '/'.
-			list = append(list, k)
+		var list []microstorage.KV
+		for k, v := range data {
+			list = append(list, microstorage.MustKV(microstorage.NewKV(k, v)))
 		}
 		return list, nil
 	}
 
-	var list []string
+	var list []microstorage.KV
 
 	keyLen := len(key)
-	for k, _ := range data {
+	for k, v := range data {
 		if len(k) <= keyLen+1 {
 			continue
 		}
@@ -347,19 +311,15 @@ func (s *Storage) List(ctx context.Context, key string) ([]string, error) {
 			continue
 		}
 
-		list = append(list, k[keyLen+1:])
+		k = k[keyLen+1:]
+		list = append(list, microstorage.MustKV(microstorage.NewKV(k, v)))
 	}
 
 	return list, nil
 }
 
-func (s *Storage) Delete(ctx context.Context, key string) error {
-	var err error
-
-	key, err = microstorage.SanitizeKey(key)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+func (s *Storage) Delete(ctx context.Context, k microstorage.K) error {
+	key := k.Key()
 
 	var body []byte
 	{
@@ -378,7 +338,7 @@ func (s *Storage) Delete(ctx context.Context, key string) error {
 		}
 	}
 
-	_, err = s.k8sClient.Core().RESTClient().
+	_, err := s.k8sClient.Core().RESTClient().
 		Patch(types.MergePatchType).
 		Context(ctx).
 		AbsPath(s.tpoEndpoint).
