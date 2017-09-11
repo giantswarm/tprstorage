@@ -16,17 +16,19 @@ package tprstorage
 		-integration.key string
 			key file path (default "$HOME/.minikube/apiserver.key")
 		-integration.server string
-			Kubernetes API server address (default "https://192.168.64.16:8443")
+			Kubernetes API server address (default "https://$(minikube ip):8443")
 */
 
 import (
 	"context"
 	"flag"
+	"os/exec"
 	"os/user"
 	"path"
+	"strings"
 	"testing"
 
-	"github.com/giantswarm/micrologger"
+	"github.com/giantswarm/micrologger/microloggertest"
 	"github.com/giantswarm/microstorage/storagetest"
 
 	"k8s.io/client-go/kubernetes"
@@ -49,7 +51,16 @@ func init() {
 		return path.Join(u.HomeDir, relativePath)
 	}
 
-	flag.StringVar(&server, "integration.server", "https://192.168.64.16:8443", "Kubernetes API server address")
+	var serverDefault string
+	{
+		out, err := exec.Command("minikube", "ip").Output()
+		if err == nil {
+			minikubeIP := strings.TrimSpace(string(out))
+			serverDefault = "https://" + string(minikubeIP) + ":8443"
+		}
+	}
+
+	flag.StringVar(&server, "integration.server", serverDefault, "Kubernetes API server address")
 	flag.StringVar(&crtFile, "integration.crt", homePath(".minikube/apiserver.crt"), "certificate file path")
 	flag.StringVar(&keyFile, "integration.key", homePath(".minikube/apiserver.key"), "key file path")
 	flag.StringVar(&caFile, "integration.ca", homePath(".minikube/ca.crt"), "CA file path")
@@ -75,20 +86,11 @@ func TestIntegration(t *testing.T) {
 		}
 	}
 
-	var logger micrologger.Logger
-	{
-		config := micrologger.DefaultConfig()
-		logger, err = micrologger.New(config)
-		if err != nil {
-			t.Fatalf("error creating logger: %#v", err)
-		}
-	}
-
 	var storage *Storage
 	{
 		config := DefaultConfig()
 		config.K8sClient = k8sClient
-		config.Logger = logger
+		config.Logger = microloggertest.New()
 
 		config.TPO.Name = "integration-test"
 
@@ -101,7 +103,7 @@ func TestIntegration(t *testing.T) {
 			path := path.Join(storage.tpr.Endpoint(config.TPO.Namespace), config.TPO.Name)
 			_, err := k8sClient.CoreV1().RESTClient().Delete().AbsPath(path).DoRaw()
 			if err != nil {
-				t.Log("error cleaning up TPO %s/%s: %#v", config.TPO.Namespace, config.TPO.Name, err)
+				t.Logf("error cleaning up TPO %s/%s: %#v", config.TPO.Namespace, config.TPO.Name, err)
 			}
 		}()
 	}
