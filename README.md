@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/giantswarm/tprstorage.svg?style=svg)](https://circleci.com/gh/giantswarm/tprstorage)
+[![CircleCI](https://circleci.com/gh/giantswarm/tprstorage.svg?style=shield)](https://circleci.com/gh/giantswarm/tprstorage)
 
 # tprstorage
 
