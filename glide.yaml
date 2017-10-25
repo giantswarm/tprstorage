@@ -7,4 +7,4 @@ import:
 - package: github.com/giantswarm/microstorage
   version: master
 - package: github.com/giantswarm/operatorkit
-  version: master
+  version: cd857eadb2263e63e7d45d6eba0a9ea66f04f403
