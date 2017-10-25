@@ -1,5 +1,5 @@
-hash: 9d23ffd3f16bba5bca54b89b5690f2596bd64d0678ba6cb6e81ffb2ac8a7ac10
-updated: 2017-10-25T15:29:07.007422202+02:00
+hash: da0257e9ba3c1757a39e0c1dddef38367c2ea0db73c4e18c8ed241bd178cec43
+updated: 2017-10-25T16:37:38.121323111+02:00
 imports:
 - name: github.com/cenkalti/backoff
   version: 309aa717adbf351e92864cbedf9cca0b769a4b5a
@@ -31,7 +31,7 @@ imports:
   subpackages:
   - storagetest
 - name: github.com/giantswarm/operatorkit
-  version: cd857eadb2263e63e7d45d6eba0a9ea66f04f403
+  version: bbeb7dcef2187b467b05dc597acffb299f572d0e
   subpackages:
   - tpr
 - name: github.com/go-kit/kit
