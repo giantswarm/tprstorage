@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/microstorage"
@@ -14,6 +16,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	api "k8s.io/client-go/pkg/api/v1"
+)
+
+const (
+	tpoCreateMaxElapsedTime = 30 * time.Second
 )
 
 type TPRConfig struct {
@@ -198,18 +204,31 @@ func (s *Storage) Boot(ctx context.Context) error {
 		if err != nil {
 			return microerror.Maskf(err, "marshaling %#v", tpo)
 		}
-		_, err = s.k8sClient.Core().RESTClient().
-			Post().
-			Context(ctx).
-			AbsPath(s.tpoListEndpoint).
-			Body(body).
-			DoRaw()
-		if errors.IsAlreadyExists(err) {
-			s.logger.Log("debug", "TPO "+tpo.Name+" already exists")
-		} else if err != nil {
-			return microerror.Maskf(err, "creating TPO %#v", tpo)
-		} else {
-			s.logger.Log("debug", "TPO "+tpo.Name+" created")
+
+		createTpo := func() error {
+			_, err = s.k8sClient.Core().RESTClient().
+				Post().
+				Context(ctx).
+				AbsPath(s.tpoListEndpoint).
+				Body(body).
+				DoRaw()
+			if errors.IsAlreadyExists(err) {
+				s.logger.Log("debug", "TPO "+tpo.Name+" already exists")
+			} else if err != nil {
+				return microerror.Maskf(err, "creating TPO %#v", tpo)
+			} else {
+				s.logger.Log("debug", "TPO "+tpo.Name+" created")
+			}
+
+			return nil
+		}
+
+		createTpoBackoff := backoff.NewExponentialBackOff()
+		createTpoBackoff.MaxElapsedTime = tpoCreateMaxElapsedTime
+
+		err = backoff.Retry(createTpo, createTpoBackoff)
+		if err != nil {
+			return microerror.Mask(err)
 		}
 	}
 

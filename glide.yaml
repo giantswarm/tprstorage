@@ -8,3 +8,5 @@ import:
   version: master
 - package: github.com/giantswarm/operatorkit
   version: master
+- package: github.com/cenkalti/backoff
+  version: v1.1.0
